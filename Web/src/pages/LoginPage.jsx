@@ -13,9 +13,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { LogIn, Mail, Lock, Chrome } from "lucide-react"; // Using Chrome for Google icon placeholder
 import { motion } from "framer-motion";
-// import axios from 'axios';
-import api from "@/lib/axios";
-
+import api, { apiRequest } from "@/lib/axios";
+import { FrontDemoMode } from "../config";
 
 
 const LoginPage = ({ user, setUser }) => {
@@ -42,26 +41,33 @@ const LoginPage = ({ user, setUser }) => {
     setIsLoading(true);
 
     try {
-      // Fetch CSRF token
-      const csrfRes = await api.get("/csrf.php");
-      const csrfToken = csrfRes.data.csrf_token;
+      let csrfToken;
+      if (FrontDemoMode) {
+        csrfToken = "demo-csrf-token";
+      } else {
+        const csrfRes = await apiRequest({ url: "/csrf.php", method: "get" });
+        csrfToken = csrfRes.data.csrf_token;
+      }
 
-      const response = await api.post(
-        "/auth.php?action=login",
-        { email, password },
-        {
+      let data;
+      if (FrontDemoMode) {
+        data = { status: "success", user: { email, role: "user", name: "Demo User" } };
+      } else {
+        const response = await apiRequest({
+          url: "/auth.php?action=login",
+          method: "post",
+          data: { email, password },
           headers: {
             "Content-Type": "application/json",
             "X-CSRF-Token": csrfToken,
           },
-        }
-      );
-
-      const data = response.data;
+        });
+        data = response.data;
+      }
 
       if (data.status === "success") {
-        toast({ title: "Login Successful", description: "Welcome back!" });
-        setUser(response.data.user);
+        toast({ title: FrontDemoMode ? "Demo Login Successful" : "Login Successful", description: FrontDemoMode ? "You are logged in as a demo user." : "Welcome back!" });
+        setUser(data.user);
         localStorage.setItem("isAuthenticated", "true");
         if (data.user.role === "admin") {
           navigate("/admin", { replace: true });

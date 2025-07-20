@@ -12,7 +12,8 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { UploadCloud, FileCheck, XCircle, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import api from "@/lib/axios";
+import api, { apiRequest } from "@/lib/axios";
+import { FrontDemoMode } from "../config";
 
 const UploadPage = () => {
   const navigate = useNavigate();
@@ -188,23 +189,35 @@ const UploadPage = () => {
     formData.append("file", file);
 
     try {
-      const csrfRes = await api.get("/csrf.php");
-      const csrfToken = csrfRes.data.csrf_token;
+      let csrfToken;
+      if (FrontDemoMode) {
+        csrfToken = "demo-csrf-token";
+      } else {
+        const csrfRes = await apiRequest({ url: "/csrf.php", method: "get" });
+        csrfToken = csrfRes.data.csrf_token;
+      }
 
-      const response = await api.post("/document.php?action=upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          "X-CSRF-Token": csrfToken,
-        },
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          setUploadProgress(percent);
-        },
-      });
-
-      const result = response.data;
+      let result;
+      if (FrontDemoMode) {
+        result = { success: true, file_id: 123, message: "Demo upload successful" };
+      } else {
+        const response = await apiRequest({
+          url: "/document.php?action=upload",
+          method: "post",
+          data: formData,
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "X-CSRF-Token": csrfToken,
+          },
+          onUploadProgress: (progressEvent) => {
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            setUploadProgress(percent);
+          },
+        });
+        result = response.data;
+      }
 
       if (result.success) {
         setUploadStatus("success");
@@ -246,28 +259,44 @@ const UploadPage = () => {
     setIsExtractingTitles(true); // Start loading
 
     try {
-      const csrfRes = await api.get("/csrf.php");
-      const csrfToken = csrfRes.data.csrf_token;
+      let csrfToken;
+      if (FrontDemoMode) {
+        csrfToken = "demo-csrf-token";
+      } else {
+        const csrfRes = await apiRequest({ url: "/csrf.php", method: "get" });
+        csrfToken = csrfRes.data.csrf_token;
+      }
 
-      const response = await api.post(
-        "/document.php?action=getTitles",
-        { document_id: documentId },
-        {
+      let result;
+      if (FrontDemoMode) {
+        result = {
+          success: true,
+          titles: [
+            { index: 0, title: "[DEMO] What is Artificial Intelligence?" },
+            { index: 1, title: "[DEMO] History of AI" },
+            { index: 2, title: "[DEMO] Applications of AI" },
+            { index: 3, title: "[DEMO] Challenges and Future" }
+          ],
+          doc_id: 456
+        };
+      } else {
+        const response = await apiRequest({
+          url: "/document.php?action=getTitles",
+          method: "post",
+          data: { document_id: documentId },
           headers: {
             "Content-Type": "application/json",
             "X-CSRF-Token": csrfToken,
           },
-        }
-      );
-
-      const result = response.data;
+        });
+        result = response.data;
+      }
 
       if (result.success) {  
         setExtractedTitles(result.titles);
         setEditedTitles(result.titles);
         setMlDocId(result.doc_id); // Save doc_id
         setTitlesSaved(false); // Reset saved state for new titles
-        console.log('ML Document ID captured:', result.doc_id); // Debug log
         saveToLocalStorage(result.titles, documentId, result.doc_id, false); // Save titles, document ID, and ML document ID
         toast({
           title: "Titles Extracted",
@@ -303,37 +332,40 @@ const UploadPage = () => {
     }
 
     try {
-      // Fetch CSRF token
-      const csrfRes = await api.get("/csrf.php");
-      const csrfToken = csrfRes.data.csrf_token;
+      let csrfToken;
+      if (FrontDemoMode) {
+        csrfToken = "demo-csrf-token";
+      } else {
+        const csrfRes = await apiRequest({ url: "/csrf.php", method: "get" });
+        csrfToken = csrfRes.data.csrf_token;
+      }
 
-      // ✅ Preserve original indexes when saving
-      const titlesWithIndexes = editedTitles.map((titleObj, arrayIndex) => ({
-        index: titleObj.index !== undefined ? titleObj.index : arrayIndex,
-        title: titleObj.title
-      }));
-
-      // Send save request
-      const response = await api.post(
-        "/document.php?action=saveTitles",
-        {
-          document_id: documentId,
-          titles: titlesWithIndexes,
-        },
-        {
+      let result;
+      if (FrontDemoMode) {
+        result = { success: true };
+      } else {
+        const response = await apiRequest({
+          url: "/document.php?action=saveTitles",
+          method: "post",
+          data: {
+            document_id: documentId,
+            titles: editedTitles.map((titleObj, arrayIndex) => ({
+              index: titleObj.index !== undefined ? titleObj.index : arrayIndex,
+              title: titleObj.title
+            })),
+          },
           headers: {
             "Content-Type": "application/json",
             "X-CSRF-Token": csrfToken,
           },
-        }
-      );
-
-      const result = response.data;
+        });
+        result = response.data;
+      }
 
       if (result.success) {
         setShowGenerateButton(true); // Show the button
         setTitlesSaved(true); // Mark titles as saved
-        saveToLocalStorage(titlesWithIndexes, documentId, mlDocId, true); // Save edited titles and doc_id
+        saveToLocalStorage(editedTitles, documentId, mlDocId, true); // Save edited titles and doc_id
         toast({
           title: "Titles Saved",
           description: "The edited titles were saved successfully. You can now generate slides.",
@@ -413,28 +445,77 @@ const UploadPage = () => {
     setGenerateStatus("loading");
 
     try {
-      // Fetch CSRF token
-      const csrfRes = await api.get("/csrf.php");
-      const csrfToken = csrfRes.data.csrf_token;
+      let csrfToken;
+      if (FrontDemoMode) {
+        csrfToken = "demo-csrf-token";
+      } else {
+        const csrfRes = await apiRequest({ url: "/csrf.php", method: "get" });
+        csrfToken = csrfRes.data.csrf_token;
+      }
 
-      console.log('Using ML Document ID for slides generation:', mlDocId); // Debug log
-      console.log('Request payload:', { ml_document_id: mlDocId, titles: titlesWithIndexes }); // Debug log
+      let result;
+      if (FrontDemoMode) {
+        result = {
+          success: true,
+          slides: [
+            {
+              id: 1,
+              title: "[DEMO] What is Artificial Intelligence?",
+              bullets: [
+                "AI is the simulation of human intelligence by machines. (DEMO)",
+                "Includes learning, reasoning, problem-solving, perception, and language understanding. (DEMO)",
+                "Used in various fields such as robotics, natural language processing, and computer vision. (DEMO)"
+              ],
+              images: [
+                "../../media/logo.png",
+                "../../media/logo.png",
+                "../../media/logo.png",
+              ],
 
-      // Send request to generate slides using doc_id
-      const response = await api.post(
-        "/document.php?action=generateSlides",
-        { ml_document_id: mlDocId, titles: titlesWithIndexes },
-        {
+            },
+            {
+              id: 2,
+              title: "[DEMO] History of AI",
+              bullets: [
+                "The term 'Artificial Intelligence' was coined in 1956. (DEMO)",
+                "Early research focused on symbolic methods and problem solving. (DEMO)",
+                "Recent advances include deep learning and neural networks. (DEMO)"
+              ]
+            },
+            {
+              id: 3,
+              title: "[DEMO] Applications of AI",
+              bullets: [
+                "Healthcare: Disease diagnosis, drug discovery, personalized medicine. (DEMO)",
+                "Finance: Fraud detection, algorithmic trading, risk assessment. (DEMO)",
+                "Transportation: Self-driving cars, traffic prediction, logistics optimization. (DEMO)"
+              ]
+            },
+            {
+              id: 4,
+              title: "[DEMO] Challenges and Future",
+              bullets: [
+                "Ethical concerns: Bias, privacy, job displacement. (DEMO)",
+                "Technical challenges: Generalization, explainability, safety. (DEMO)",
+                "Future: Continued integration into daily life and new innovations. (DEMO)"
+              ]
+            }
+          ]
+        };
+      } else {
+        const response = await apiRequest({
+          url: "/document.php?action=generateSlides",
+          method: "post",
+          data: { ml_document_id: mlDocId, titles: titlesWithIndexes },
           headers: {
             "Content-Type": "application/json",
             "X-CSRF-Token": csrfToken,
           },
-        }
-      );
+        });
+        result = response.data;
+      }
 
-      console.log('API Response:', response.data); // Debug log
-
-      const result = response.data;
+      console.log('API Response:', result); // Debug log
 
       if (result.success) {
         setGenerateStatus("success");

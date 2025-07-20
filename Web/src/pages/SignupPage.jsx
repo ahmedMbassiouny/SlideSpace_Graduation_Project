@@ -13,7 +13,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { UserPlus, Mail, Lock } from "lucide-react";
 import { motion } from "framer-motion";
-import api from "@/lib/axios";
+import api, { apiRequest } from "@/lib/axios";
+import { FrontDemoMode } from "../config";
 
 const RegisterPage = ({ user }) => {
   const [name, setName] = useState("");
@@ -71,26 +72,34 @@ const RegisterPage = ({ user }) => {
     setIsLoading(true);
 
     try {
-      const csrfRes = await api.get("/csrf.php");
-      const csrfToken = csrfRes.data.csrf_token;
+      let csrfToken;
+      if (FrontDemoMode) {
+        csrfToken = "demo-csrf-token";
+      } else {
+        const csrfRes = await apiRequest({ url: "/csrf.php", method: "get" });
+        csrfToken = csrfRes.data.csrf_token;
+      }
 
-      const response = await api.post(
-        "/auth.php?action=register",
-        { name, email, password },
-        {
+      let data;
+      if (FrontDemoMode) {
+        data = { status: "success" };
+      } else {
+        const response = await apiRequest({
+          url: "/auth.php?action=register",
+          method: "post",
+          data: { name, email, password },
           headers: {
             "Content-Type": "application/json",
             "X-CSRF-Token": csrfToken,
           },
-        }
-      );
-
-      const data = response.data;
+        });
+        data = response.data;
+      }
 
       if (data.status === "success") {
         toast({
-          title: "Registration Successful",
-          description: "You can now log in to your account.",
+          title: FrontDemoMode ? "Demo Registration Successful" : "Registration Successful",
+          description: FrontDemoMode ? "You are registered as a demo user. You can now log in with any credentials." : "You can now log in to your account.",
         });
         navigate("/login", { replace: true });
       } else {

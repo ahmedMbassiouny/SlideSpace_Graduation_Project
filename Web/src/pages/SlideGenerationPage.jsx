@@ -37,7 +37,11 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import Reveal from "reveal.js";
 import "reveal.js/dist/reveal.css";
-import api from "@/lib/axios";
+import api, { apiRequest } from "@/lib/axios";
+import { FrontDemoMode } from "../config";
+
+// src/config.js
+// export const FrontDemoMode = true; // Set to false for normal mode
 
 // ImageViewer component to handle base64 images
 function ImageViewer({ base64 }) {
@@ -61,19 +65,13 @@ const mockSlides = [
       "- Qubits vs bits",
       "- Qubits vs bits",
       "- Qubits vs bits",
-      "- Qubits vs bits",
-      "- Qubits vs bits",
-      "- Qubits vs bits",
-      "- Qubits vs bits",
-      "- Qubits vs bits",
       "- Potential applications",
     ],
     images: [
-      "../../media/Ahmed Bassiouny-Photoroom.png",
-      "../../media/Ahmed Bassiouny-Photoroom.png",
-      "../../media/Ahmed Bassiouny-Photoroom.png",
-      "../../media/Ahmed Bassiouny-Photoroom.png",
-      "../../media/Ahmed Bassiouny-Photoroom.png",
+      "../../media/logo.png",
+      "../../media/logo.png",
+      "../../media/logo.png",
+
     ],
   },
   {
@@ -114,44 +112,24 @@ const SlideGenerationPage = () => {
 
   // Use received slides if available, otherwise use mock data
   const [slides, setSlides] = useState(() => {
-    // First try to load from localStorage
-    const savedSlides = localStorage.getItem(`editedSlides_${documentId}`);
-    if (savedSlides) {
-      try {
-        const parsedSlides = JSON.parse(savedSlides);
-        return parsedSlides.map((slide, index) => ({
-          ...slide,
-          id: slide.id || index + 1,
-          bullets: slide.bullets || slide.points || []
-        }));
-      } catch (error) {
-        console.error('Error parsing saved slides:', error);
-      }
-    }
-    
-    // If no saved slides, use received slides or mock data
+    // Only use received slides or mock data
     const initialSlides = receivedSlides || mockSlides;
     return initialSlides.map((slide, index) => ({
       ...slide,
       id: slide.id || index + 1,
-      bullets: slide.bullets || slide.points || []
+      bullets: slide.bullets || slide.points || [],
     }));
   });
-  
+
   // Add state to track the current received slides
-  const [currentReceivedSlides, setCurrentReceivedSlides] = useState(slides || receivedSlides || mockSlides);
+  const [currentReceivedSlides, setCurrentReceivedSlides] = useState(
+    slides || receivedSlides || mockSlides
+  );
 
   // Update currentReceivedSlides whenever slides change
   useEffect(() => {
     setCurrentReceivedSlides(slides);
   }, [slides]);
-
-  // Save slides to localStorage whenever they change
-  useEffect(() => {
-    if (documentId && slides.length > 0) {
-      localStorage.setItem(`editedSlides_${documentId}`, JSON.stringify(slides));
-    }
-  }, [slides, documentId]);
 
   // Cleanup localStorage when component unmounts
   useEffect(() => {
@@ -161,25 +139,15 @@ const SlideGenerationPage = () => {
     };
   }, [documentId]);
 
-  // Function to clear localStorage for this document
-  const clearLocalStorage = () => {
-    if (documentId) {
-      localStorage.removeItem(`editedSlides_${documentId}`);
-    }
-  };
-
   // Function to reset slides to original state
   const resetToOriginalSlides = () => {
     const originalSlides = receivedSlides || mockSlides;
     const resetSlides = originalSlides.map((slide, index) => ({
       ...slide,
       id: slide.id || index + 1,
-      bullets: slide.bullets || slide.points || []
+      bullets: slide.bullets || slide.points || [],
     }));
-    
     setSlides(resetSlides);
-    clearLocalStorage();
-    
     toast({
       title: "Slides Reset",
       description: "Slides have been reset to their original state.",
@@ -188,7 +156,9 @@ const SlideGenerationPage = () => {
 
   const [shareLink] = useState("https://slidespace.example.com/share/xyz123");
   const [email, setEmail] = useState("");
-  const [theme, setTheme] = useState("moon");
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem("revealTheme") || "moon"
+  );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [editingSlideId, setEditingSlideId] = useState(null);
   const [editedTitle, setEditedTitle] = useState("");
@@ -232,7 +202,7 @@ const SlideGenerationPage = () => {
 
     deckRef.current = new Reveal(deckDivRef.current, {
       transition,
-      // theme: theme,
+      theme: theme,
       previewLinks: true,
       controls: true,
       progress: true,
@@ -240,6 +210,11 @@ const SlideGenerationPage = () => {
       touch: true,
       loop: false,
       rtl: false,
+      scrollActivationWidth: null,
+      view: "slide",
+
+      // Force the scrollbar to remain visible
+      scrollProgress: true,
       navigationMode: "default",
       shuffle: false,
       fragments: true,
@@ -254,8 +229,8 @@ const SlideGenerationPage = () => {
       autoSlideMethod: "default",
       defaultTiming: null,
       mouseWheel: false,
-      hideInactiveCursor: false,
-      hideCursorTime: undefined,
+      // hideInactiveCursor: false,
+      // hideCursorTime: undefined,
       postMessage: true,
       postMessageEvents: false,
       focusBodyOnPageVisibility: true,
@@ -264,7 +239,7 @@ const SlideGenerationPage = () => {
       display: "block",
       hideAddressBar: true,
       keyboard: {
-        27: null, // ESC key
+        // 27: null, // ESC key
         13: "next", // ENTER key
         32: "next", // SPACE key
         37: "prev", // LEFT arrow
@@ -316,46 +291,99 @@ const SlideGenerationPage = () => {
     const themeLinkId = "reveal-theme-link";
     const href = `https://unpkg.com/reveal.js/dist/theme/${theme}.css`;
 
-    let existingLink = document.getElementById(themeLinkId);
-    if (existingLink) {
-      existingLink.href = href;
-    } else {
-      const link = document.createElement("link");
+    let link = document.getElementById(themeLinkId);
+    if (!link) {
+      link = document.createElement("link");
       link.rel = "stylesheet";
       link.id = themeLinkId;
       link.href = href;
       document.head.appendChild(link);
+    } else if (link.href !== href) {
+      link.href = href;
     }
 
-    // Force reinitialize Reveal.js to apply theme
-    if (deckRef.current) {
-      deckRef.current.off("slidechanged");
-      deckRef.current.destroy(); // full cleanup
+    // Wait for the theme CSS to load before initializing Reveal.js
+    const onThemeLoaded = () => {
+      if (deckRef.current) {
+        deckRef.current.off("slidechanged");
+        deckRef.current.destroy();
+        deckRef.current = null;
+      }
       deckRef.current = new Reveal(deckDivRef.current, {
-        transition: "slide",
-        embedded: true,
+        transition,
+        theme: theme,
+        previewLinks: true,
         controls: true,
         progress: true,
         center: true,
+        touch: true,
         loop: false,
-        backgroundTransition: "fade",
-        width: 960,
-        height: 700,
-        slideNumber: true,
+        rtl: false,
+        scrollActivationWidth: null,
+        view: "slide",
+
+        // Force the scrollbar to remain visible
+        scrollProgress: true,
+        navigationMode: "default",
+        shuffle: false,
+        fragments: true,
+        fragmentInURL: false,
+        embedded: true,
+        help: true,
+        showNotes: false,
+        autoPlayMedia: null,
+        preloadIframes: null,
+        autoSlide: 0,
+        autoSlideStoppable: true,
+        autoSlideMethod: "default",
+        defaultTiming: null,
+        mouseWheel: false,
+        // hideInactiveCursor: false,
+        // hideCursorTime: undefined,
+        postMessage: true,
+        postMessageEvents: false,
+        focusBodyOnPageVisibility: true,
+        viewDistance: 3,
+        mobileViewDistance: 2,
+        display: "block",
+        hideAddressBar: true,
+        keyboard: {
+          // 27: null, // ESC key
+          13: "next", // ENTER key
+          32: "next", // SPACE key
+          37: "prev", // LEFT arrow
+          38: "prev", // UP arrow
+          39: "next", // RIGHT arrow
+          40: "next", // DOWN arrow
+        },
         overview: true,
       });
 
       deckRef.current.initialize().then(() => {
-        deckRef.current.slide(currentSlide); // Restore current slide
-
+        deckRef.current.slide(currentSlide);
         deckRef.current.on("slidechanged", (event) => {
           setCurrentSlide(event.indexh);
         });
-
-        console.log(`Reveal.js reinitialized with ${theme} theme`);
+        // Optionally, force a redraw
+        deckRef.current.layout();
       });
+    };
+
+    if (link.sheet) {
+      // Already loaded
+      onThemeLoaded();
+    } else {
+      link.addEventListener("load", onThemeLoaded, { once: true });
     }
+
+    return () => {
+      if (link) link.removeEventListener("load", onThemeLoaded);
+    };
   }, [theme, transition]);
+
+  useEffect(() => {
+    localStorage.setItem("revealTheme", theme);
+  }, [theme]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareLink);
@@ -444,14 +472,52 @@ const SlideGenerationPage = () => {
         deckRef.current.destroy();
         deckRef.current = null;
         deckRef.current = new Reveal(deckDivRef.current, {
-          transition: "slide",
-          embedded: true,
+          transition,
+          theme: theme,
+          previewLinks: true,
           controls: true,
           progress: true,
           center: true,
+          touch: true,
           loop: false,
-          backgroundTransition: "fade",
-          slideNumber: true,
+          rtl: false,
+          scrollActivationWidth: null,
+          view: "slide",
+
+          // Force the scrollbar to remain visible
+          scrollProgress: true,
+          navigationMode: "default",
+          shuffle: false,
+          fragments: true,
+          fragmentInURL: false,
+          embedded: true,
+          help: true,
+          showNotes: false,
+          autoPlayMedia: null,
+          preloadIframes: null,
+          autoSlide: 0,
+          autoSlideStoppable: true,
+          autoSlideMethod: "default",
+          defaultTiming: null,
+          mouseWheel: false,
+          // hideInactiveCursor: false,
+          // hideCursorTime: undefined,
+          postMessage: true,
+          postMessageEvents: false,
+          focusBodyOnPageVisibility: true,
+          viewDistance: 3,
+          mobileViewDistance: 2,
+          display: "block",
+          hideAddressBar: true,
+          keyboard: {
+            // 27: null, // ESC key
+            13: "next", // ENTER key
+            32: "next", // SPACE key
+            37: "prev", // LEFT arrow
+            38: "prev", // UP arrow
+            39: "next", // RIGHT arrow
+            40: "next", // DOWN arrow
+          },
           overview: true,
         });
 
@@ -484,26 +550,27 @@ const SlideGenerationPage = () => {
 
   const generatePDF = async () => {
     setIsGeneratingPDF(true);
-    
+
     try {
       toast({
         title: "PDF Generation Started",
-        description: "Preparing your presentation for PDF export. The print dialog will open automatically.",
+        description:
+          "Preparing your presentation for PDF export. The print dialog will open automatically.",
       });
 
       // Create a temporary container for PDF generation
-      const tempContainer = document.createElement('div');
-      tempContainer.style.position = 'absolute';
-      tempContainer.style.left = '-9999px';
-      tempContainer.style.top = '0';
-      tempContainer.style.width = '1920px'; // Standard presentation width
-      tempContainer.style.height = '1080px'; // Standard presentation height
-      tempContainer.style.backgroundColor = 'white';
-      tempContainer.style.padding = '40px';
-      tempContainer.style.fontFamily = 'Arial, sans-serif';
-      tempContainer.style.color = 'black';
-      tempContainer.style.overflow = 'hidden';
-      
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.top = "0";
+      tempContainer.style.width = "1920px"; // Standard presentation width
+      tempContainer.style.height = "1080px"; // Standard presentation height
+      tempContainer.style.backgroundColor = "white";
+      tempContainer.style.padding = "40px";
+      tempContainer.style.fontFamily = "Arial, sans-serif";
+      tempContainer.style.color = "black";
+      tempContainer.style.overflow = "hidden";
+
       document.body.appendChild(tempContainer);
 
       // Generate PDF content with enhanced formatting
@@ -517,16 +584,19 @@ const SlideGenerationPage = () => {
               Professional Presentation Document
             </p>
             <div style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 10px; backdrop-filter: blur(10px);">
-              <span style="font-size: 14px;">Generated on ${new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}</span>
+              <span style="font-size: 14px;">Generated on ${new Date().toLocaleDateString(
+        "en-US",
+        {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }
+      )}</span>
             </div>
           </div>
       `;
-      
+
       slides.forEach((slide, index) => {
         pdfContent += `
           <div class="slide" style="page-break-after: always; margin-bottom: 50px; padding: 30px; background: white; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.08); border: 1px solid #e1e8ed; position: relative; overflow: hidden;">
@@ -540,14 +610,14 @@ const SlideGenerationPage = () => {
               </h2>
             </div>
         `;
-        
+
         if (slide.bullets && slide.bullets.length > 0) {
           pdfContent += `
             <div style="background: #f8fafc; padding: 25px; border-radius: 12px; border-left: 5px solid #667eea;">
               <ul style="font-size: 16px; line-height: 1.8; margin: 0; padding-left: 20px; color: #4a5568; list-style: none;">
           `;
           slide.bullets.forEach((bullet, bulletIndex) => {
-            const cleanBullet = bullet.replace(/^- /, '').trim();
+            const cleanBullet = bullet.replace(/^- /, "").trim();
             if (cleanBullet) {
               pdfContent += `
                 <li style="margin-bottom: 15px; position: relative; padding-left: 25px;">
@@ -557,7 +627,7 @@ const SlideGenerationPage = () => {
               `;
             }
           });
-          pdfContent += '</ul></div>';
+          pdfContent += "</ul></div>";
         }
 
         // Add images if they exist
@@ -572,24 +642,32 @@ const SlideGenerationPage = () => {
               </div>
               <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center;">
           `;
-          
+
           slide.images.forEach((img, imgIndex) => {
             // Check if the image is base64 or URL
-            const isBase64 = typeof img === "string" && (img.length > 100 || img.startsWith("data:"));
-            const isUrl = typeof img === "string" && (img.startsWith("http") || img.startsWith("/"));
-            
+            const isBase64 =
+              typeof img === "string" &&
+              (img.length > 100 || img.startsWith("data:"));
+            const isUrl =
+              typeof img === "string" &&
+              (img.startsWith("http") || img.startsWith("/"));
+
             if (isBase64) {
               pdfContent += `
                 <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; width: 80px; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                  <img src="data:image/png;base64,${img}" alt="Slide Image ${imgIndex + 1}" style="max-width: 60px; max-height: 50px; object-fit: contain; border-radius: 4px; margin-bottom: 4px;" />
-                  <p style="font-size: 10px; color: #64748b; margin: 0; font-weight: 500;">${imgIndex + 1}</p>
+                  <img src="data:image/png;base64,${img}" alt="Slide Image ${imgIndex + 1
+                }" style="max-width: 60px; max-height: 50px; object-fit: contain; border-radius: 4px; margin-bottom: 4px;" />
+                  <p style="font-size: 10px; color: #64748b; margin: 0; font-weight: 500;">${imgIndex + 1
+                }</p>
                 </div>
               `;
             } else if (isUrl) {
               pdfContent += `
                 <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; width: 80px; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                  <img src="${img}" alt="Slide Image ${imgIndex + 1}" style="max-width: 60px; max-height: 50px; object-fit: contain; border-radius: 4px; margin-bottom: 4px;" />
-                  <p style="font-size: 10px; color: #64748b; margin: 0; font-weight: 500;">${imgIndex + 1}</p>
+                  <img src="${img}" alt="Slide Image ${imgIndex + 1
+                }" style="max-width: 60px; max-height: 50px; object-fit: contain; border-radius: 4px; margin-bottom: 4px;" />
+                  <p style="font-size: 10px; color: #64748b; margin: 0; font-weight: 500;">${imgIndex + 1
+                }</p>
                 </div>
               `;
             } else if (img === null || img === undefined || img === "") {
@@ -602,17 +680,19 @@ const SlideGenerationPage = () => {
               // Fallback for other formats
               pdfContent += `
                 <div style="text-align: center; padding: 8px; background: white; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; width: 80px; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                  <img src="${img}" alt="Slide Image ${imgIndex + 1}" style="max-width: 60px; max-height: 50px; object-fit: contain; border-radius: 4px; margin-bottom: 4px;" />
-                  <p style="font-size: 10px; color: #64748b; margin: 0; font-weight: 500;">${imgIndex + 1}</p>
+                  <img src="${img}" alt="Slide Image ${imgIndex + 1
+                }" style="max-width: 60px; max-height: 50px; object-fit: contain; border-radius: 4px; margin-bottom: 4px;" />
+                  <p style="font-size: 10px; color: #64748b; margin: 0; font-weight: 500;">${imgIndex + 1
+                }</p>
                 </div>
               `;
             }
           });
-          
-          pdfContent += '</div></div>';
+
+          pdfContent += "</div></div>";
         }
-        
-        pdfContent += '</div>';
+
+        pdfContent += "</div>";
       });
 
       pdfContent += `
@@ -628,7 +708,7 @@ const SlideGenerationPage = () => {
       </div>`;
 
       // Use browser's print functionality to generate PDF
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open("", "_blank");
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -782,9 +862,9 @@ const SlideGenerationPage = () => {
         </body>
         </html>
       `);
-      
+
       printWindow.document.close();
-      
+
       // Wait for content to load then print
       setTimeout(() => {
         printWindow.print();
@@ -794,7 +874,8 @@ const SlideGenerationPage = () => {
           // Show success message after closing
           toast({
             title: "PDF Export Complete",
-            description: "Your PDF has been generated successfully. Check your downloads folder.",
+            description:
+              "Your PDF has been generated successfully. Check your downloads folder.",
           });
         }, 2000); // Close after 2 seconds
       }, 500);
@@ -803,7 +884,6 @@ const SlideGenerationPage = () => {
       document.body.removeChild(tempContainer);
 
       // Success message is now shown after the window closes
-
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast({
@@ -822,6 +902,15 @@ const SlideGenerationPage = () => {
         variant: "destructive",
         title: "Error",
         description: "Document ID not found. Please try uploading again.",
+      });
+      return;
+    }
+
+    if (FrontDemoMode) {
+      // Simulate PPTX download
+      toast({
+        title: "PPTX Generated Successfully (Demo)",
+        description: "Demo PPTX file has been generated and saved.",
       });
       return;
     }
@@ -864,11 +953,13 @@ const SlideGenerationPage = () => {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-presentationml.presentation' });
+        const blob = new Blob([byteArray], {
+          type: "application/vnd.openxmlformats-presentationml.presentation",
+        });
 
         // Create download link
         const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
+        const link = document.createElement("a");
         link.href = url;
         link.download = result.filename || `presentation_${mode}.pptx`;
         document.body.appendChild(link);
@@ -878,7 +969,8 @@ const SlideGenerationPage = () => {
 
         toast({
           title: "PPTX Generated Successfully",
-          description: result.message || "PPTX file has been generated and saved.",
+          description:
+            result.message || "PPTX file has been generated and saved.",
         });
 
         // Reload saved PPTX files
@@ -895,7 +987,8 @@ const SlideGenerationPage = () => {
       toast({
         variant: "destructive",
         title: "Generation Error",
-        description: error.response?.data?.message || "Failed to generate PPTX file.",
+        description:
+          error.response?.data?.message || "Failed to generate PPTX file.",
       });
     } finally {
       // Clear loading state
@@ -917,73 +1010,79 @@ const SlideGenerationPage = () => {
   };
 
   const handleSaveEdit = async () => {
-    const updatedBullets = editedPoints.split("\n").filter((p) => p.trim() !== "");
+    const updatedBullets = editedPoints
+      .split("\n")
+      .filter((p) => p.trim() !== "");
     const updatedSlides = slides.map((slide) =>
-        slide.id === editingSlideId
-          ? {
-              ...slide,
-              title: editedTitle,
-              bullets: updatedBullets,
-              points: updatedBullets, // Keep both for compatibility
-            }
-          : slide
+      slide.id === editingSlideId
+        ? {
+          ...slide,
+          title: editedTitle,
+          bullets: updatedBullets,
+          points: updatedBullets, // Keep both for compatibility
+        }
+        : slide
     );
-    
+
     setSlides(updatedSlides);
     setEditingSlideId(null);
     setIsSaving(true);
-    
-    // Save to database
-    try {
-      // Fetch CSRF token
-      const csrfRes = await api.get("/csrf.php");
-      const csrfToken = csrfRes.data.csrf_token;
 
-      // Send updated slides to backend
-      const response = await api.post(
-        "/document.php?action=saveSlides",
-        {
-          document_id: documentId,
-          slides: updatedSlides,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-Token": csrfToken,
-          },
-        }
-      );
-
-      const result = response.data;
-
-      if (result.success) {
-        // Update the received slides to reflect the edited slides
-        setCurrentReceivedSlides(updatedSlides);
-        
-        // Clear localStorage since slides are now saved to database
-        clearLocalStorage();
-        
     toast({
-          title: "Slide Updated & Saved",
-          description: "Your changes have been saved to the database.",
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Save Failed",
-          description: result.message || "Failed to save changes to database.",
-        });
-      }
-    } catch (error) {
-      console.error("Error saving slides:", error);
-      toast({
-        variant: "destructive",
-        title: "Save Error",
-        description: error.response?.data?.message || "Failed to save changes to database.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
+      title: "Slide Updated & Saved",
+      description: "Your changes have been saved to the database.",
+    });
+
+    // Save to database
+    //     try {
+    //       // Fetch CSRF token
+    //       const csrfRes = await api.get("/csrf.php");
+    //       const csrfToken = csrfRes.data.csrf_token;
+    // 
+    //       // Send updated slides to backend
+    //       const response = await api.post(
+    //         "/document.php?action=saveSlides",
+    //         {
+    //           document_id: documentId,
+    //           slides: updatedSlides,
+    //         },
+    //         {
+    //           headers: {
+    //             "Content-Type": "application/json",
+    //             "X-CSRF-Token": csrfToken,
+    //           },
+    //         }
+    //       );
+    // 
+    //       const result = response.data;
+    // 
+    //       if (result.success) {
+    //         // Update the received slides to reflect the edited slides
+    //         setCurrentReceivedSlides(updatedSlides);
+    // 
+    //         toast({
+    //           title: "Slide Updated & Saved",
+    //           description: "Your changes have been saved to the database.",
+    //         });
+    //       } else {
+    //         toast({
+    //           variant: "destructive",
+    //           title: "Save Failed",
+    //           description: result.message || "Failed to save changes to database.",
+    //         });
+    //       }
+    //     } catch (error) {
+    //       console.error("Error saving slides:", error);
+    //       toast({
+    //         variant: "destructive",
+    //         title: "Save Error",
+    //         description:
+    //           error.response?.data?.message ||
+    //           "Failed to save changes to database.",
+    //       });
+    //     } finally {
+    //       setIsSaving(false);
+    //     }
   };
 
   const handleCancelEdit = () => {
@@ -991,46 +1090,48 @@ const SlideGenerationPage = () => {
   };
 
   const handlePreviewPresentation = () => {
-    // Clear localStorage since we're moving to preview with the current slides
-    clearLocalStorage();
-    
-    navigate('/preview', {
+    navigate("/preview", {
       state: {
         slides: currentReceivedSlides, // Use the updated slides instead of the original receivedSlides
         documentId: documentId,
         mlDocId: mlDocId,
-        titles: titles
-      }
+        titles: titles,
+      },
     });
   };
 
   // Load saved PPTX files
   const loadSavedPPTXFiles = async () => {
     if (!documentId) return;
-    
+
     setIsLoadingFiles(true);
     try {
+      if (FrontDemoMode) {
+        setSavedDefaultPPTX(["demo_default.pptx"]);
+        setSavedGAPPTX(["demo_ga.pptx"]);
+        return;
+      }
       // Load default PPTX files
-      const defaultResponse = await api.post('/document.php', {
-        action: 'getDefaultPPTXFiles',
-        document_id: documentId
+      const defaultResponse = await api.post("/document.php", {
+        action: "getDefaultPPTXFiles",
+        document_id: documentId,
       });
-      
+
       if (defaultResponse.data.success) {
         setSavedDefaultPPTX(defaultResponse.data.files);
       }
-      
+
       // Load GA PPTX files
-      const gaResponse = await api.post('/document.php', {
-        action: 'getGAPPTXFiles',
-        document_id: documentId
+      const gaResponse = await api.post("/document.php", {
+        action: "getGAPPTXFiles",
+        document_id: documentId,
       });
-      
+
       if (gaResponse.data.success) {
         setSavedGAPPTX(gaResponse.data.files);
       }
     } catch (error) {
-      console.error('Error loading saved PPTX files:', error);
+      console.error("Error loading saved PPTX files:", error);
     } finally {
       setIsLoadingFiles(false);
     }
@@ -1038,13 +1139,20 @@ const SlideGenerationPage = () => {
 
   // Download saved PPTX file
   const downloadSavedPPTX = async (fileId, type, filename) => {
-    try {
-      const response = await api.post('/document.php', {
-        action: 'downloadPPTX',
-        file_id: fileId,
-        type: type
+    if (FrontDemoMode) {
+      toast({
+        title: "Download Complete (Demo)",
+        description: `PPTX file "${filename}" has been downloaded successfully (demo).`,
       });
-      
+      return;
+    }
+    try {
+      const response = await api.post("/document.php", {
+        action: "downloadPPTX",
+        file_id: fileId,
+        type: type,
+      });
+
       if (response.data.success) {
         // Convert base64 to blob and download
         const binaryString = atob(response.data.file_data);
@@ -1052,24 +1160,27 @@ const SlideGenerationPage = () => {
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
-        
+        const blob = new Blob([bytes], {
+          type:
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        });
+
         const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
+        const link = document.createElement("a");
         link.href = url;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-        
+
         toast({
           title: "Download Complete",
           description: `PPTX file "${filename}" has been downloaded successfully.`,
         });
       }
     } catch (error) {
-      console.error('Error downloading PPTX file:', error);
+      console.error("Error downloading PPTX file:", error);
       toast({
         variant: "destructive",
         title: "Download Error",
@@ -1085,52 +1196,61 @@ const SlideGenerationPage = () => {
     }
   }, [documentId]);
 
+  if (!slides || slides.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <h2 className="text-xl font-bold text-red-600">
+          No slides to display. Please upload a document first.
+        </h2>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`min-h-screen bg-background ${
-        isFullscreen
-          ? "fixed inset-0 z-50"
-          : "xl:container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8"
-      }`}
+      className={`min-h-screen bg-background ${isFullscreen
+        ? "fixed inset-0 z-50"
+        : "xl:container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8"
+        }`}
     >
       <style jsx>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-track {
           background: rgba(0, 0, 0, 0.1);
           border-radius: 10px;
           margin: 10px 0;
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           border-radius: 10px;
           border: 2px solid rgba(255, 255, 255, 0.1);
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
           box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-thumb:active {
           background: linear-gradient(135deg, #4c51bf 0%, #553c9a 100%);
         }
-        
+
         /* Firefox scrollbar */
         .custom-scrollbar {
           scrollbar-width: thin;
           scrollbar-color: #667eea rgba(0, 0, 0, 0.1);
         }
-        
+
         /* Hide scrollbar when not needed */
         .custom-scrollbar::-webkit-scrollbar-thumb:vertical {
           min-height: 30px;
         }
       `}</style>
-      
+
       {!isFullscreen && (
         <motion.h1
           className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center mb-4 sm:mb-6 lg:mb-8 text-primary"
@@ -1143,18 +1263,17 @@ const SlideGenerationPage = () => {
       )}
 
       <div
-        className={`flex flex-col xl:flex-row gap-4 sm:gap-6 lg:gap-8 ${
-          isFullscreen ? "h-full" : ""
-        }`}
+        className={`flex flex-col xl:flex-row gap-4 sm:gap-6 lg:gap-8 ${isFullscreen ? "h-full" : ""
+          }`}
       >
         {/* Presentation Preview with Reveal.js */}
         <div className={`w-full ${isFullscreen ? "h-full" : "xl:w-2/3"}`}>
           {!isFullscreen && (
-            <div className="mb-4 flex flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
+            <div className="mb-4 flex flex-row flex-wrap   items-center justify-center sm:justify-between gap-3 sm:gap-4">
               <select
                 value={theme}
                 onChange={(e) => setTheme(e.target.value)}
-                className="px-3 py-2 border rounded-lg text-sm w-auto"
+                className="px-3 py-2 border rounded-lg text-sm w-auto "
               >
                 <option value="black">Theme: Black</option>
                 <option value="white">Theme: White</option>
@@ -1181,8 +1300,8 @@ const SlideGenerationPage = () => {
                 <option value="concave">Transition: Concave</option>
               </select>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground hidden sm:block">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-auto">
+                <span className="text-xs text-muted-foreground mb-2 sm:mb-0 hidden sm:block">
                   Click slides then press F for fullscreen
                 </span>
                 <Button
@@ -1190,7 +1309,7 @@ const SlideGenerationPage = () => {
                   size="icon"
                   onClick={toggleFullscreen}
                   title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-                  className="w-full sm:w-auto"
+                  className="w-auto"
                 >
                   <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />
                 </Button>
@@ -1200,9 +1319,8 @@ const SlideGenerationPage = () => {
 
           {/* Reveal.js Container */}
           <div
-            className={`presentation-container reveal theme-${theme} border rounded-lg overflow-hidden ${
-              isFullscreen ? "h-full w-full" : ""
-            }`}
+            className={`presentation-container reveal theme-${theme} border rounded-lg overflow-hidden  cursor-default ${isFullscreen ? "h-full w-full" : ""
+              }`}
             ref={deckDivRef}
             tabIndex={0}
             onFocus={() => {
@@ -1217,11 +1335,13 @@ const SlideGenerationPage = () => {
               }
             }}
             style={{
+              cursor: "default",
               height: isFullscreen ? "100vh" : "65vh",
               minHeight: isFullscreen ? "100vh" : "300px",
               maxHeight: isFullscreen ? "100vh" : "65vh",
               width: "100%",
               position: "relative",
+              backgroundColor: theme === "white" ? "#fff" : undefined,
             }}
           >
             {/* Fullscreen Exit Button */}
@@ -1238,7 +1358,7 @@ const SlideGenerationPage = () => {
             )}
 
             {/* Reveal.js Slide Content */}
-            <div className="slides overflow-y-scroll overflow-x-hidden custom-scrollbar">
+            <div className="slides overflow-y-scroll overflow-x-hidden custom-scrollbar ">
               {slides.map((slide, index) => (
                 <section
                   key={index}
@@ -1251,14 +1371,19 @@ const SlideGenerationPage = () => {
                   <h2 className="text-5xl font-extrabold mb-12 text-center leading-tight tracking-wide">
                     {slide.title}
                   </h2>
-                  
+
                   {/* Bullet Points with Fragments (appear one-by-one) */}
                   {slide.bullets?.length > 0 && (
                     <div className="w-full max-w-4xl">
                       <ul className="text-2xl space-y-6 leading-relaxed">
                         {slide.bullets.map((point, pointIndex) => (
-                          <li key={pointIndex} className="fragment fade-in transform transition-all duration-500 hover:scale-105">
-                            <p className="text-left font-medium">{point.replace(/^- /, "")}</p>
+                          <li
+                            key={pointIndex}
+                            className="fragment fade-right transform transition-all duration-500 hover:scale-105"
+                          >
+                            <p className="text-left font-medium">
+                              {point.replace(/^- /, "")}
+                            </p>
                           </li>
                         ))}
                       </ul>
@@ -1270,14 +1395,20 @@ const SlideGenerationPage = () => {
                       <div className="grid grid-cols-3 gap-6 flex-wrap justify-evenly">
                         {slide.images.map((img, i) => {
                           // Check if the image is base64 or URL
-                          const isBase64 = typeof img === "string" && (img.length > 100 || img.startsWith("data:"));
-                          const isUrl = typeof img === "string" && (img.startsWith("http") || img.startsWith("/"));
+                          const isBase64 =
+                            typeof img === "string" &&
+                            (img.length > 100 || img.startsWith("data:"));
+                          const isUrl =
+                            typeof img === "string" &&
+                            (img.startsWith("http") || img.startsWith("/"));
 
                           if (isBase64) {
                             return (
                               <div
                                 key={i}
-                                onClick={() => openImage(`data:image/png;base64,${img}`)}
+                                onClick={() =>
+                                  openImage(`data:image/png;base64,${img}`)
+                                }
                                 className="w-full h-auto rounded-xl cursor-pointer object-contain hover:scale-110 transition-all duration-300 transform shadow-lg hover:shadow-2xl fragment fade-in"
                                 style={{ maxHeight: "140px" }}
                               >
@@ -1295,7 +1426,11 @@ const SlideGenerationPage = () => {
                                 style={{ maxHeight: "140px" }}
                               />
                             );
-                          } else if (img === null || img === undefined || img === "") {
+                          } else if (
+                            img === null ||
+                            img === undefined ||
+                            img === ""
+                          ) {
                             return (
                               <div
                                 key={i}
@@ -1328,103 +1463,174 @@ const SlideGenerationPage = () => {
 
           {/* Slide Thumbnails */}
           {!isFullscreen && (
-            <div className="py-2 border-t">
-              <h3 className="text-sm font-medium mb-2">Slide Overview</h3>
-              <div className="flex justify-between  gap-2 w-full overflow-x-auto pb-2 ">
-                {slides.map((slide, index) => (
-                  <button
-                    key={index}
-                    data-slide-index={index}
-                    onClick={() => setCurrentSlide(index)}
-                    className={`flex-shrink-0  p-2 text-xs border rounded w-full text-left shadow-xl 
-                      min-w-[80px] max-w-[120px]
-                      sm:min-w-[100px] sm:max-w-[160px]
-                      md:min-w-[120px] md:max-w-[200px]
-                      lg:min-w-[140px] lg:max-w-[240px]
-                      xl:min-w-[160px] xl:max-w-[280px]
-                      2xl:min-w-[200px] 2xl:max-w-[320px]
-                      transition-all
-                      ${
-                        index === currentSlide
+            <div className="flex flex-col justify-between w-full space-y-4 sm:space-y-6">
+
+              <div className="py-2 border-t">
+                <h3 className="text-sm font-medium mb-2">Slide Overview</h3>
+                <div className="flex justify-between  gap-2 w-full overflow-x-auto pb-2 ">
+                  {slides.map((slide, index) => (
+                    <button
+                      key={index}
+                      data-slide-index={index}
+                      onClick={() => setCurrentSlide(index)}
+                      className={`flex-shrink-0 p-2 text-xs border rounded text-left shadow-xl 
+                      min-w-[100px] max-w-[160px] sm:min-w-[120px] sm:max-w-[200px] md:min-w-[140px] md:max-w-[240px] lg:min-w-[160px] lg:max-w-[280px] xl:min-w-[200px] xl:max-w-[320px] transition-all
+                      ${index === currentSlide
                           ? "bg-primary text-primary-foreground border-primary"
                           : "bg-background hover:bg-muted"
-                      }`}
-                  >
-                    <div className="font-medium  truncate">{slide.title}</div>
-                    <div className="truncate">
-                      {slide.bullets?.[0]?.substring(0, 400)}...
-                    </div>
-                  </button>
-                ))}
+                        }`}
+                    >
+                      <div className="font-medium truncate">{slide.title}</div>
+                      <div className="truncate">
+                        {slide.bullets?.[0]?.substring(0, 400)}...
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              <Card className="shadow-md border-border/60 bg-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg sm:text-xl text-primary">
+                    Edit Current Slide
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {editingSlideId === slides[currentSlide]?.id ? (
+                    <div className="space-y-3">
+                      <Input
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        className="text-sm"
+                        placeholder="Slide Title"
+                      />
+                      <Textarea
+                        value={editedPoints}
+                        onChange={(e) => setEditedPoints(e.target.value)}
+                        rows={4}
+                        className="text-sm"
+                        placeholder="Bullet points (one per line)"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCancelEdit}
+                          className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveEdit}
+                          className="flex-1"
+                          disabled={isSaving}
+                        >
+                          <Save className="w-4 h-4 mr-2" />
+                          {isSaving ? "Saving..." : "Save"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Button
+                        className="w-full text-sm sm:text-base"
+                        onClick={() => handleEditClick(slides[currentSlide])}
+                      >
+                        <Edit className="w-4 h-4 mr-2" /> Edit Current Slide
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={resetToOriginalSlides}
+                        className="w-full text-xs"
+                      >
+                        Reset to Original
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+
+              <Card className="shadow-md border-border/60 bg-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg sm:text-xl text-primary">
+                    Share
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                    <Input
+                      value={shareLink}
+                      readOnly
+                      className="flex-grow text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCopyLink}
+                      className="w-full sm:w-auto"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        className="w-full text-sm sm:text-base"
+                        variant="secondary"
+                      >
+                        <Mail className="w-4 h-4 mr-2" /> Share via Email
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Share via Email</DialogTitle>
+                        <DialogDescription>
+                          Enter the email address to send the presentation link to.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="email" className="text-right text-sm">
+                            Email
+                          </Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="col-span-3 text-sm"
+                            placeholder="recipient@example.com"
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          type="submit"
+                          onClick={handleShareEmail}
+                          className="w-full sm:w-auto"
+                        >
+                          Send Link
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </CardContent>
+              </Card>
+
             </div>
           )}
         </div>
 
         {/* Actions Panel */}
         <div
-          className={`flex flex-col justify-between w-full xl:w-1/3 space-y-4 sm:space-y-6 ${
-            isFullscreen ? "hidden" : ""
-          }`}
+          className={`flex flex-col  w-full xl:w-1/3 space-y-4 sm:space-y-6 ${isFullscreen ? "hidden" : ""
+            }`}
         >
           {/* Edit Panel */}
-          <Card className="shadow-md border-border/60 bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg sm:text-xl text-primary">
-                Edit Current Slide
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {editingSlideId === slides[currentSlide]?.id ? (
-                <div className="space-y-3">
-                  <Input
-                    value={editedTitle}
-                    onChange={(e) => setEditedTitle(e.target.value)}
-                    className="text-sm"
-                    placeholder="Slide Title"
-                  />
-                  <Textarea
-                    value={editedPoints}
-                    onChange={(e) => setEditedPoints(e.target.value)}
-                    rows={4}
-                    className="text-sm"
-                    placeholder="Bullet points (one per line)"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCancelEdit}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button size="sm" onClick={handleSaveEdit} className="flex-1" disabled={isSaving}>
-                      <Save className="w-4 h-4 mr-2" /> 
-                      {isSaving ? "Saving..." : "Save"}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                <Button
-                  className="w-full text-sm sm:text-base"
-                  onClick={() => handleEditClick(slides[currentSlide])}
-                >
-                  <Edit className="w-4 h-4 mr-2" /> Edit Current Slide
-                </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={resetToOriginalSlides}
-                    className="w-full text-xs"
-                  >
-                    Reset to Original
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
 
           <Card className="shadow-md border-border/60 bg-card">
             <CardHeader className="pb-3">
@@ -1438,14 +1644,16 @@ const SlideGenerationPage = () => {
             <CardContent className="space-y-4">
               {/* PDF Export */}
               <div className="space-y-2">
-              <Button
-                className="w-full text-sm sm:text-base"
-                onClick={() => handleExport("pdf")}
-                  disabled={isGeneratingPDF || isGeneratingPPTX || isGeneratingGAPPTX}
-              >
-                  <Download className="w-4 h-4 mr-2" /> 
+                <Button
+                  className="w-full text-sm sm:text-base"
+                  onClick={() => handleExport("pdf")}
+                  disabled={
+                    isGeneratingPDF || isGeneratingPPTX || isGeneratingGAPPTX
+                  }
+                >
+                  <Download className="w-4 h-4 mr-2" />
                   {isGeneratingPDF ? "Generating PDF..." : "Export as PDF"}
-              </Button>
+                </Button>
                 <p className="text-xs text-muted-foreground">
                   Professional PDF format with enhanced styling
                 </p>
@@ -1453,14 +1661,14 @@ const SlideGenerationPage = () => {
 
               {/* Standard PPTX Export */}
               <div className="space-y-2">
-              <Button
-                className="w-full text-sm sm:text-base"
-                onClick={() => handleExport("pptx")}
+                <Button
+                  className="w-full text-sm sm:text-base"
+                  onClick={() => handleExport("pptx")}
                   disabled={isGeneratingPPTX || isGeneratingGAPPTX}
-              >
-                  <Download className="w-4 h-4 mr-2" /> 
+                >
+                  <Download className="w-4 h-4 mr-2" />
                   {isGeneratingPPTX ? "Generating..." : "Export as PPTX"}
-              </Button>
+                </Button>
                 <p className="text-xs text-muted-foreground">
                   AI-powered PowerPoint with standard ML optimization
                 </p>
@@ -1481,11 +1689,14 @@ const SlideGenerationPage = () => {
                   onClick={() => handleExport("pptx_ga")}
                   disabled={isGeneratingPPTX || isGeneratingGAPPTX}
                 >
-                  <Download className="w-4 h-4 mr-2" /> 
-                  {isGeneratingGAPPTX ? "Generating GA..." : "Export as PPTX (GA)"}
+                  <Download className="w-4 h-4 mr-2" />
+                  {isGeneratingGAPPTX
+                    ? "Generating GA..."
+                    : "Export as PPTX (GA)"}
                 </Button>
                 <p className="text-xs text-purple-600 font-medium">
-                  🚀 Advanced Genetic Algorithm AI for superior layout optimization
+                  🚀 Advanced Genetic Algorithm AI for superior layout
+                  optimization
                 </p>
               </div>
 
@@ -1501,17 +1712,26 @@ const SlideGenerationPage = () => {
               {/* Saved PPTX Files Section */}
               {(savedDefaultPPTX.length > 0 || savedGAPPTX.length > 0) && (
                 <div className="mt-6 pt-4 border-t border-border">
-                  <h4 className="text-sm font-semibold text-primary mb-3">Saved PPTX Files</h4>
-                  
+                  <h4 className="text-sm font-semibold text-primary mb-3">
+                    Saved PPTX Files
+                  </h4>
+
                   {/* Default PPTX Files */}
                   {savedDefaultPPTX.length > 0 && (
                     <div className="mb-4">
-                      <h5 className="text-xs font-medium text-muted-foreground mb-2">Standard PPTX</h5>
+                      <h5 className="text-xs font-medium text-muted-foreground mb-2">
+                        Standard PPTX
+                      </h5>
                       <div className="space-y-2">
                         {savedDefaultPPTX.map((file) => (
-                          <div key={file.id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                          <div
+                            key={file.id}
+                            className="flex items-center justify-between p-2 bg-muted rounded-lg"
+                          >
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium truncate">{file.filename}</p>
+                              <p className="text-xs font-medium truncate">
+                                {file.filename}
+                              </p>
                               <p className="text-xs text-muted-foreground">
                                 {new Date(file.created_at).toLocaleDateString()}
                               </p>
@@ -1519,7 +1739,13 @@ const SlideGenerationPage = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => downloadSavedPPTX(file.id, 'default', file.filename)}
+                              onClick={() =>
+                                downloadSavedPPTX(
+                                  file.id,
+                                  "default",
+                                  file.filename
+                                )
+                              }
                               className="ml-2"
                             >
                               <Download className="w-3 h-3" />
@@ -1533,12 +1759,19 @@ const SlideGenerationPage = () => {
                   {/* GA PPTX Files */}
                   {savedGAPPTX.length > 0 && (
                     <div>
-                      <h5 className="text-xs font-medium text-muted-foreground mb-2">GA PPTX</h5>
+                      <h5 className="text-xs font-medium text-muted-foreground mb-2">
+                        GA PPTX
+                      </h5>
                       <div className="space-y-2">
                         {savedGAPPTX.map((file) => (
-                          <div key={file.id} className="flex items-center justify-between p-2 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                          <div
+                            key={file.id}
+                            className="flex items-center justify-between p-2 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg"
+                          >
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium truncate">{file.filename}</p>
+                              <p className="text-xs font-medium truncate">
+                                {file.filename}
+                              </p>
                               <p className="text-xs text-purple-600">
                                 {new Date(file.created_at).toLocaleDateString()}
                               </p>
@@ -1546,7 +1779,9 @@ const SlideGenerationPage = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => downloadSavedPPTX(file.id, 'ga', file.filename)}
+                              onClick={() =>
+                                downloadSavedPPTX(file.id, "ga", file.filename)
+                              }
                               className="ml-2"
                             >
                               <Download className="w-3 h-3" />
@@ -1562,78 +1797,14 @@ const SlideGenerationPage = () => {
               {/* Loading indicator */}
               {isLoadingFiles && (
                 <div className="mt-4 text-center">
-                  <p className="text-xs text-muted-foreground">Loading saved files...</p>
+                  <p className="text-xs text-muted-foreground">
+                    Loading saved files...
+                  </p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <Card className="shadow-md border-border/60 bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg sm:text-xl text-primary">
-                Share
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                <Input
-                  value={shareLink}
-                  readOnly
-                  className="flex-grow text-sm"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyLink}
-                  className="w-full sm:w-auto"
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button
-                    className="w-full text-sm sm:text-base"
-                    variant="secondary"
-                  >
-                    <Mail className="w-4 h-4 mr-2" /> Share via Email
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Share via Email</DialogTitle>
-                    <DialogDescription>
-                      Enter the email address to send the presentation link to.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="email" className="text-right text-sm">
-                        Email
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="col-span-3 text-sm"
-                        placeholder="recipient@example.com"
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      type="submit"
-                      onClick={handleShareEmail}
-                      className="w-full sm:w-auto"
-                    >
-                      Send Link
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardContent>
-          </Card>
 
           <Card className="shadow-md border-border/60 bg-card">
             <CardHeader className="pb-3">

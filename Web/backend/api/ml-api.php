@@ -1,13 +1,13 @@
 <?php
 
 // first method to get ml api
-$ML_BASE_URL = 'https://0463-35-192-144-14.ngrok-free.app';
+// $ML_BASE_URL = 'https://0463-35-192-144-14.ngrok-free.app';
 
 
 // git method to get ml api
 // https://gist.github.com/AhmedGA-PPTX/79ec449dc37d6264520ed2f92c88ff4c
 
-$gistId = '79ec449dc37d6264520ed2f92c88ff4c';  // GitHub Gist ID
+$gistId = 'e89d7d8cd85b998d2b80feccdadc883a';  // GitHub Gist ID
 $gistUrl =  "https://api.github.com/gists/$gistId";
 
 function getCurrentNgrokUrl($gistUrl)

@@ -12,21 +12,21 @@ import { motion } from 'framer-motion';
 
 // Mock data
 const mockUser = {
-  name: "Dr. Evelyn Reed",
-  email: "evelyn.reed@research.edu",
-  avatarUrl: "https://images.unsplash.com/photo-1521119989659-a83eee488004?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8cG9ydHJhaXR8ZW58MHx8MHx8fDA%3D&auto=format&fit=crop&w=300&q=60", // Placeholder
-  initials: "ER",
+  name: "Ahmed Bassiouny",
+  email: "ahmed.bassiouny@example.com",
+  avatarUrl: "/media/Ahmed Bassiouny-Photoroom.png",
+  initials: "AB",
 };
 
 const mockDocuments = [
-  { id: 1, name: "Quantum_Entanglement_Review.pdf", uploadDate: "2025-04-28", status: "Processed" },
-  { id: 2, name: "AI_Ethics_Framework.docx", uploadDate: "2025-04-25", status: "Processed" },
-  { id: 3, name: "CV_Model_Performance.pdf", uploadDate: "2025-04-20", status: "Processing" },
+  { id: 1, name: "GP_Thesis_Final.pdf", uploadDate: "2024-06-01", status: "Processed" },
+  { id: 2, name: "AI_Presentation_Slides.pptx", uploadDate: "2024-05-20", status: "Processed" },
+  { id: 3, name: "IEEE_Conference_Paper.docx", uploadDate: "2024-05-10", status: "Processing" },
 ];
 
 const mockPresentations = [
-  { id: 101, name: "Quantum Entanglement Slides", createdDate: "2025-04-28", rating: 5 },
-  { id: 102, name: "AI Ethics Presentation", createdDate: "2025-04-25", rating: 4 },
+  { id: 101, name: "Graduation Project Defense", createdDate: "2024-06-01", rating: 5 },
+  { id: 102, name: "IEEE S'25 Plan Overview", createdDate: "2024-05-20", rating: 4 },
 ];
 
 const UserProfilePage = () => {

@@ -1,0 +1,1 @@
+export const FrontDemoMode = true; // Set to false for normal mode 
